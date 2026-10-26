@@ -19,6 +19,7 @@ Run:
 """
 
 import base64
+import datetime
 import email
 import html
 import imaplib
@@ -31,6 +32,7 @@ import tempfile
 import threading
 import time
 import tkinter as tk
+import urllib.request
 from email import policy
 from email.utils import getaddresses, parsedate_to_datetime
 from pathlib import Path
@@ -39,6 +41,26 @@ from urllib.parse import unquote
 
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
           "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+# ------------------------------------------------------------ expiry date
+# The program stops working after this date. Change it, then rebuild the app.
+EXPIRY_DATE = datetime.date(2026, 11, 15)      # year, month, day
+
+
+def current_date():
+    """Today's date. Uses internet time when reachable (it cannot be changed
+    by editing the PC clock); falls back to the computer's own date."""
+    try:
+        req = urllib.request.Request("https://www.google.com", method="HEAD")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return parsedate_to_datetime(resp.headers["Date"]).date()
+    except Exception:
+        return datetime.date.today()
+
+
+def is_expired(today=None):
+    return (today or current_date()) > EXPIRY_DATE
 
 
 # ----------------------------------------------------------------- helpers
@@ -296,7 +318,7 @@ class App:
     def __init__(self, root):
         self.root = root
         root.title("Extract Gmail to PDF with Attachments")
-        root.geometry("700x880")
+        root.geometry("700x900")
 
         self.pause_ev = threading.Event()
         self.pause_ev.set()          # set = running, cleared = paused
@@ -308,7 +330,10 @@ class App:
 
         ttk.Label(root, text="Developed by Sanjeev",
                   font=("Segoe UI", 10, "italic", "bold"), anchor="center",
-                  foreground="darkred").pack(fill="x", pady=(0, 4))
+                  foreground="darkred").pack(fill="x", pady=(0, 0))
+        ttk.Label(root, text=f"Valid until {EXPIRY_DATE:%d %b %Y}",
+                  font=("Segoe UI", 9), anchor="center",
+                  foreground="gray30").pack(fill="x", pady=(0, 4))
 
         frm = ttk.Frame(root, padding=12)
         frm.pack(fill="both", expand=True)
@@ -460,6 +485,12 @@ class App:
 
     # ---- main flow ----
     def start(self):
+        if is_expired():
+            messagebox.showerror(
+                "Program expired",
+                f"This program expired on {EXPIRY_DATE:%d %B %Y}.\n"
+                "Please contact the developer (Sanjeev) for a new version.")
+            return
         v = {k: x.get().strip() for k, x in self.vars.items()}
         if not (v["user"] and v["password"] and v["sender"]):
             messagebox.showwarning("Missing details",
@@ -671,5 +702,13 @@ class App:
 
 if __name__ == "__main__":
     root = tk.Tk()
+    if is_expired():
+        root.withdraw()
+        messagebox.showerror(
+            "Program expired",
+            f"This program expired on {EXPIRY_DATE:%d %B %Y}.\n"
+            "Please contact the developer (Sanjeev) for a new version.")
+        root.destroy()
+        sys.exit(0)
     App(root)
     root.mainloop()
