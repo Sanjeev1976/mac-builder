@@ -331,9 +331,9 @@ class App:
         ttk.Label(root, text="Developed by Sanjeev",
                   font=("Segoe UI", 10, "italic", "bold"), anchor="center",
                   foreground="darkred").pack(fill="x", pady=(0, 0))
-        ttk.Label(root, text=f"Valid until {EXPIRY_DATE:%d %b %Y}",
-                  font=("Segoe UI", 9), anchor="center",
-                  foreground="gray30").pack(fill="x", pady=(0, 4))
+#        ttk.Label(root, text=f"Valid until {EXPIRY_DATE:%d %b %Y}",
+#                  font=("Segoe UI", 9), anchor="center",
+#                  foreground="gray30").pack(fill="x", pady=(0, 4))
 
         frm = ttk.Frame(root, padding=12)
         frm.pack(fill="both", expand=True)
