@@ -215,14 +215,18 @@ def render_pdf(browser, html_text, pdf_path, workdir, load_images):
     html_file = os.path.join(workdir, "msg.html")
     with open(html_file, "w", encoding="utf-8") as f:
         f.write(html_text)
-    if os.path.exists(pdf_path):
-        os.remove(pdf_path)
+    # Chrome writes into the temp work folder (always allowed); this program
+    # then moves the file to the chosen folder. This avoids macOS blocking
+    # Chrome from writing into Documents / Desktop / Downloads.
+    tmp_pdf = os.path.join(workdir, "out.pdf")
+    if os.path.exists(tmp_pdf):
+        os.remove(tmp_pdf)
     cmd = [
         browser, "--headless=new", "--disable-gpu", "--no-first-run",
         "--disable-extensions",
         f"--user-data-dir={os.path.join(workdir, 'profile')}",
         "--no-pdf-header-footer", "--print-to-pdf-no-header",
-        f"--print-to-pdf={pdf_path}",
+        f"--print-to-pdf={tmp_pdf}",
     ]
     if load_images:
         cmd.append("--virtual-time-budget=15000")
@@ -230,7 +234,12 @@ def render_pdf(browser, html_text, pdf_path, workdir, load_images):
     flags = subprocess.CREATE_NO_WINDOW if sys.platform.startswith("win") else 0
     subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                    timeout=120, creationflags=flags)
-    return os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0
+    if not (os.path.exists(tmp_pdf) and os.path.getsize(tmp_pdf) > 0):
+        return False
+    if os.path.exists(pdf_path):
+        os.remove(pdf_path)
+    shutil.move(tmp_pdf, pdf_path)
+    return True
 
 
 def list_folders(imap, include_junk):
@@ -594,7 +603,21 @@ class App:
     def run(self, v):
         workdir = tempfile.mkdtemp(prefix="gmail_pdf_")
         try:
-            os.makedirs(v["outdir"], exist_ok=True)
+            try:
+                os.makedirs(v["outdir"], exist_ok=True)
+                probe = os.path.join(v["outdir"], ".write_test")
+                with open(probe, "w") as f:
+                    f.write("ok")
+                os.remove(probe)
+            except OSError as e:
+                self.log(
+                    f"Cannot write to the folder:\n  {v['outdir']}\n({e})\n"
+                    "On a Mac: choose a different folder with Browse (for "
+                    "example a new folder inside Documents) and click Allow "
+                    "if macOS asks for access. If it keeps failing, open "
+                    "System Settings > Privacy & Security > Files and "
+                    "Folders (or Full Disk Access) and allow this app.")
+                return
             self.log("Connecting to Gmail…")
             imap = imaplib.IMAP4_SSL("imap.gmail.com")
             imap.login(v["user"], v["password"].replace(" ", ""))
