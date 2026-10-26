@@ -1,0 +1,49 @@
+name: Build Mac app
+
+# Runs automatically when files are uploaded, and can also be started by hand
+# from the Actions tab (Run workflow button).
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-latest        # Apple Silicon (M1/M2/M3/M4)
+            label: AppleSilicon
+          - runner: macos-15-intel      # Intel Macs
+            label: Intel
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyInstaller
+        run: python -m pip install pyinstaller
+
+      - name: Build the .app
+        run: |
+          SCRIPT=$(ls *.py | head -n 1)
+          echo "Building $SCRIPT"
+          pyinstaller --windowed --name GmailToPDF "$SCRIPT"
+
+      - name: Sign the app (ad-hoc)
+        run: codesign --force --deep --sign - dist/GmailToPDF.app
+
+      - name: Create the .dmg
+        run: |
+          mkdir dmg_staging
+          cp -R dist/GmailToPDF.app dmg_staging/
+          ln -s /Applications dmg_staging/Applications
+          hdiutil create -volname "Gmail to PDF" -srcfolder dmg_staging -ov -format UDZO "GmailToPDF-${{ matrix.label }}.dmg"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GmailToPDF-${{ matrix.label }}
+          path: GmailToPDF-${{ matrix.label }}.dmg
